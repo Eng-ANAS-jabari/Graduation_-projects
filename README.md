@@ -249,7 +249,7 @@
             card.querySelector('.student-total-display').innerText = total;
             const res = card.querySelector('.student-result-text');
             if (total >= 90) { res.innerText = "امتياز"; res.className = "student-result-text font-bold text-[10px] px-2 py-1 bg-indigo-100 rounded-full text-indigo-700"; }
-            else if (total >= 50) { res.innerText = "ناجح"; res.className = "student-result-text font-bold text-[10px] px-2 py-1 bg-emerald-100 rounded-full text-emerald-700"; }
+            else if (total >= 70) { res.innerText = "ناجح"; res.className = "student-result-text font-bold text-[10px] px-2 py-1 bg-emerald-100 rounded-full text-emerald-700"; }
             else { res.innerText = "راسب"; res.className = "student-result-text font-bold text-[10px] px-2 py-1 bg-rose-100 rounded-full text-rose-700"; }
         }
 
