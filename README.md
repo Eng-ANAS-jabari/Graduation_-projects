@@ -2,253 +2,294 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام تقييم مشاريع التخرج - علامات منفصلة | Individual Team Grading</title>
+    <title>نظام تقييم مشاريع التخرج | النسخة المطورة</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'grad-eval-app';
-
-        async function initAuth() {
-            try { await signInAnonymously(auth); } catch (e) { console.error(e); }
-        }
-        initAuth();
-
-        window.saveToCloud = async function() {
-            const user = auth.currentUser;
-            if (!user) { alert("جاري الاتصال... / Connecting..."); return; }
-            const data = getFormData();
-            try {
-                const btn = document.getElementById('saveCloudBtn');
-                btn.disabled = true; btn.innerText = "جاري الحفظ... / Saving...";
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'evaluations'), {
-                    ...data,
-                    timestamp: serverTimestamp(),
-                    userId: user.uid
-                });
-                alert("تم الحفظ بنجاح! / Saved Successfully!");
-            } catch (e) { alert("خطأ في الحفظ / Save Error"); }
-            finally { 
-                const btn = document.getElementById('saveCloudBtn');
-                btn.disabled = false; btn.innerText = "حفظ سحابي / Cloud Save";
-            }
-        };
-    </script>
     <style>
         body { font-family: 'Tajawal', sans-serif; background-color: #f1f5f9; }
-        .lang-en { display: block; font-size: 0.75rem; opacity: 0.7; font-weight: normal; }
-        .score-card { transition: all 0.3s ease; }
-        .score-card:focus-within { border-color: #4f46e5; transform: translateY(-2px); }
-        @media print { .no-print { display: none; } body { background: white; } }
+        .score-input { border: 2px solid #e2e8f0; transition: all 0.2s; text-align: center; font-weight: 700; font-size: 1.1rem; }
+        .score-input:focus { border-color: #4f46e5; outline: none; background-color: #fffbeb; }
+        .lang-en { display: block; font-size: 0.7rem; opacity: 0.6; font-weight: normal; margin-top: 2px; }
+        @media print { .no-print { display: none; } body { background: white; padding: 0; } .container { box-shadow: none; border: none; width: 100%; max-width: 100%; } .student-card { border: 1px solid #eee; break-inside: avoid; } }
     </style>
 </head>
 <body class="p-4 md:p-8">
 
-    <div class="max-w-6xl mx-auto bg-white shadow-2xl rounded-3xl overflow-hidden container">
-        <!-- Header -->
-        <div class="bg-indigo-900 p-8 text-white text-center border-b-4 border-yellow-500">
-            <h1 class="text-3xl font-bold">تقييم مشروع التخرج (فريق)</h1>
-            <p class="text-lg opacity-80">Graduation Project Evaluation (Team)</p>
+    <div id="app" class="max-w-6xl mx-auto space-y-6">
+        
+        <!-- Selection Screen -->
+        <div id="roleSelection" class="bg-white p-10 rounded-[2rem] shadow-2xl text-center no-print border border-gray-100">
+            <h2 class="text-3xl font-black mb-2 text-slate-800">بوابة التقييم الرقمية</h2>
+            <p class="text-slate-500 mb-10">اختر نوع النموذج لبدء رصد العلامات</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <button onclick="setRole('supervisor')" class="group p-10 bg-white border-4 border-indigo-600 rounded-[2rem] hover:bg-indigo-600 hover:text-white transition-all duration-300 shadow-xl">
+                    <div class="text-5xl mb-4 group-hover:scale-110 transition-transform">📋</div>
+                    <div class="text-2xl font-black">نموذج المشرف</div>
+                    <div class="text-sm opacity-70 mt-1">Supervisor's Model</div>
+                </button>
+                
+                <button onclick="setRole('examiner')" class="group p-10 bg-white border-4 border-emerald-600 rounded-[2rem] hover:bg-emerald-600 hover:text-white transition-all duration-300 shadow-xl">
+                    <div class="text-5xl mb-4 group-hover:scale-110 transition-transform">🎓</div>
+                    <div class="text-2xl font-black">نموذج المناقش</div>
+                    <div class="text-sm opacity-70 mt-1">Examiner's Model</div>
+                </button>
+            </div>
         </div>
 
-        <form id="evaluationForm" class="p-6 md:p-10 space-y-10">
-            <!-- Project Info -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pb-8 border-b">
-                <div class="space-y-2">
-                    <label class="font-bold">عنوان المشروع <span class="lang-en">Project Title</span></label>
-                    <input type="text" id="projectTitle" class="w-full p-3 bg-gray-50 border rounded-xl" placeholder="عنوان البحث">
-                </div>
-                <div class="space-y-2">
-                    <label class="font-bold">المشرف <span class="lang-en">Supervisor</span></label>
-                    <input type="text" id="supervisor" class="w-full p-3 bg-gray-50 border rounded-xl">
-                </div>
-                <div class="space-y-2">
-                    <label class="font-bold">المناقش <span class="lang-en">Examiner</span></label>
-                    <input type="text" id="examiner" class="w-full p-3 bg-gray-50 border rounded-xl">
-                </div>
-                <div class="space-y-2">
-                    <label class="font-bold">التاريخ <span class="lang-en">Date</span></label>
-                    <input type="date" id="evalDate" class="w-full p-3 bg-gray-50 border rounded-xl">
-                </div>
+        <!-- Main Form Container -->
+        <div id="mainContainer" class="hidden bg-white shadow-2xl rounded-[2.5rem] overflow-hidden container border border-gray-100">
+            
+            <!-- Header -->
+            <div id="formHeader" class="p-10 text-white text-center relative">
+                <button onclick="resetRole()" class="absolute top-6 left-6 bg-white/20 hover:bg-white/40 px-4 py-2 rounded-full text-xs no-print transition-all">
+                    تغيير النموذج / Switch
+                </button>
+                <h1 id="headerTitle" class="text-4xl font-black mb-1"></h1>
+                <p id="headerSub" class="text-lg opacity-90 font-medium"></p>
             </div>
 
-            <!-- Students Section -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <!-- Student 1 -->
-                <div class="bg-blue-50/50 p-6 rounded-3xl border border-blue-100 space-y-4">
-                    <div class="flex justify-between items-center">
-                        <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">طالب 1 / S1</span>
+            <form id="evaluationForm" class="p-8 md:p-12 space-y-10">
+                
+                <!-- Info Section -->
+                <div id="infoSection" class="grid grid-cols-1 md:grid-cols-3 gap-8 pb-8 border-b-2 border-slate-50">
+                    <div class="space-y-1">
+                        <label class="block font-bold text-slate-700 text-sm">اختر المشروع <span class="lang-en">Select Project</span></label>
+                        <select id="projectSelect" class="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none font-medium" onchange="loadProjectData()">
+                            <option value="">-- اختر المشروع --</option>
+                            <option value="p1">نظام إدارة المستودعات الذكي</option>
+                            <option value="p2">تطبيق التجارة الإلكترونية المتقدم</option>
+                            <option value="p3">نظام الحماية باستخدام الذكاء الاصطناعي</option>
+                            <option value="custom">مشروع آخر (يدوي)...</option>
+                        </select>
+                        <input type="text" id="projectTitle" class="w-full p-2 mt-2 bg-gray-50 border border-slate-200 rounded-lg hidden" placeholder="أدخل اسم المشروع">
                     </div>
-                    <input type="text" id="name1" placeholder="اسم الطالب الأول" class="w-full p-3 border rounded-xl mb-4 font-bold">
-                    
-                    <div class="space-y-3">
-                        <div>
-                            <label class="text-xs font-bold text-gray-500">تقرير (30) <span class="lang-en">Report</span></label>
-                            <input type="number" id="s1_r" max="30" value="0" oninput="calc(1)" class="w-full p-2 border rounded-lg text-center font-black text-blue-700">
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-gray-500">عملي (40) <span class="lang-en">Practical</span></label>
-                            <input type="number" id="s1_p" max="40" value="0" oninput="calc(1)" class="w-full p-2 border rounded-lg text-center font-black text-blue-700">
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-gray-500">مناقشة (30) <span class="lang-en">Presentation</span></label>
-                            <input type="number" id="s1_d" max="30" value="0" oninput="calc(1)" class="w-full p-2 border rounded-lg text-center font-black text-blue-700">
-                        </div>
-                    </div>
-                    <div class="pt-4 border-t border-blue-200 text-center">
-                        <span class="text-xs text-gray-400 block">المجموع / Total</span>
-                        <span id="total1" class="text-3xl font-black text-blue-800">0</span>
-                    </div>
+                    <div id="dynamicFields" class="contents"></div>
                 </div>
 
-                <!-- Student 2 -->
-                <div class="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100 space-y-4">
-                    <div class="flex justify-between items-center">
-                        <span class="bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-bold">طالب 2 / S2</span>
-                    </div>
-                    <input type="text" id="name2" placeholder="اسم الطالب الثاني" class="w-full p-3 border rounded-xl mb-4 font-bold">
-                    
-                    <div class="space-y-3">
-                        <div>
-                            <label class="text-xs font-bold text-gray-500">تقرير (30) <span class="lang-en">Report</span></label>
-                            <input type="number" id="s2_r" max="30" value="0" oninput="calc(2)" class="w-full p-2 border rounded-lg text-center font-black text-indigo-700">
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-gray-500">عملي (40) <span class="lang-en">Practical</span></label>
-                            <input type="number" id="s2_p" max="40" value="0" oninput="calc(2)" class="w-full p-2 border rounded-lg text-center font-black text-indigo-700">
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-gray-500">مناقشة (30) <span class="lang-en">Presentation</span></label>
-                            <input type="number" id="s2_d" max="30" value="0" oninput="calc(2)" class="w-full p-2 border rounded-lg text-center font-black text-indigo-700">
-                        </div>
-                    </div>
-                    <div class="pt-4 border-t border-indigo-200 text-center">
-                        <span class="text-xs text-gray-400 block">المجموع / Total</span>
-                        <span id="total2" class="text-3xl font-black text-indigo-800">0</span>
-                    </div>
+                <!-- Sync Marks Button (Only for Supervisor) -->
+                <div id="syncSection" class="hidden no-print bg-amber-50 p-4 rounded-xl border border-amber-200 flex items-center justify-between">
+                    <p class="text-sm text-amber-800 font-bold">💡 دمج علامات (الكتاب والعملي) لجميع الطلاب؟</p>
+                    <button type="button" onclick="syncSharedMarks()" class="bg-amber-500 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-amber-600 transition-all">تفعيل الدمج / Sync Marks</button>
                 </div>
 
-                <!-- Student 3 -->
-                <div class="bg-purple-50/50 p-6 rounded-3xl border border-purple-100 space-y-4">
-                    <div class="flex justify-between items-center">
-                        <span class="bg-purple-600 text-white px-3 py-1 rounded-full text-xs font-bold">طالب 3 / S3</span>
-                    </div>
-                    <input type="text" id="name3" placeholder="اسم الطالب الثالث" class="w-full p-3 border rounded-xl mb-4 font-bold">
-                    
-                    <div class="space-y-3">
-                        <div>
-                            <label class="text-xs font-bold text-gray-500">تقرير (30) <span class="lang-en">Report</span></label>
-                            <input type="number" id="s3_r" max="30" value="0" oninput="calc(3)" class="w-full p-2 border rounded-lg text-center font-black text-purple-700">
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-gray-500">عملي (40) <span class="lang-en">Practical</span></label>
-                            <input type="number" id="s3_p" max="40" value="0" oninput="calc(3)" class="w-full p-2 border rounded-lg text-center font-black text-purple-700">
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-gray-500">مناقشة (30) <span class="lang-en">Presentation</span></label>
-                            <input type="number" id="s3_d" max="30" value="0" oninput="calc(3)" class="w-full p-2 border rounded-lg text-center font-black text-purple-700">
-                        </div>
-                    </div>
-                    <div class="pt-4 border-t border-purple-200 text-center">
-                        <span class="text-xs text-gray-400 block">المجموع / Total</span>
-                        <span id="total3" class="text-3xl font-black text-purple-800">0</span>
-                    </div>
-                </div>
-            </div>
+                <!-- Students Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8" id="studentsWrapper"></div>
 
-            <!-- Global Decision -->
-            <div class="bg-gray-900 p-6 rounded-2xl text-white flex flex-col md:flex-row gap-6 items-center justify-between">
-                <div>
-                    <p class="font-bold text-yellow-500">ملاحظة عامة:</p>
-                    <p class="text-sm opacity-70">يتم تقييم كل طالب بناءً على مجهوده الفردي ومشاركته في المشروع.</p>
+                <!-- Actions -->
+                <div class="pt-8 flex flex-col md:flex-row items-center justify-between gap-6 border-t-2 border-slate-50">
+                    <div class="no-print flex flex-wrap justify-center gap-3">
+                        <button type="button" onclick="exportToExcel()" class="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-emerald-700 shadow-lg flex items-center gap-2">
+                            <span>ملف Excel</span>
+                        </button>
+                        <button type="button" onclick="shareWhatsApp()" class="bg-green-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-600 shadow-lg flex items-center gap-2">
+                            <span>WhatsApp</span>
+                        </button>
+                        <button type="button" onclick="window.print()" class="bg-slate-800 text-white px-6 py-3 rounded-xl font-bold hover:bg-slate-700 shadow-lg flex items-center gap-2">
+                            <span>طباعة PDF</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="w-full md:w-auto">
-                    <button type="button" onclick="window.print()" class="w-full bg-indigo-600 px-8 py-4 rounded-xl font-bold hover:bg-indigo-500 transition-colors no-print">
-                        طباعة النتائج / Print PDF
-                    </button>
-                </div>
-            </div>
-
-            <!-- Actions Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 no-print">
-                <button type="button" onclick="exportExcel()" class="bg-emerald-600 text-white p-4 rounded-xl font-bold hover:bg-emerald-700">Excel Export</button>
-                <button type="button" id="saveCloudBtn" onclick="saveToCloud()" class="bg-blue-600 text-white p-4 rounded-xl font-bold hover:bg-blue-700">Cloud Save</button>
-                <button type="button" onclick="sendWhatsApp()" class="bg-green-600 text-white p-4 rounded-xl font-bold hover:bg-green-700">WhatsApp Send</button>
-            </div>
-        </form>
+            </form>
+        </div>
     </div>
 
+    <!-- Student Template -->
+    <template id="studentTemplate">
+        <div class="student-card bg-slate-50/50 border-2 border-slate-100 rounded-[2rem] p-6 flex flex-col h-full transition-all">
+            <div class="mb-4">
+                <label class="block text-[10px] font-black text-slate-400 mb-1 uppercase">اختر الطالب / Student</label>
+                <select class="student-name-select w-full bg-white border-2 border-slate-100 p-2 rounded-lg font-bold text-slate-700 focus:border-indigo-500 outline-none">
+                    <option value="">-- اختر الطالب --</option>
+                    <option>جمانة سعادة</option>
+                    <option>شهد فقوسة</option>
+                    <option>تامر غيث</option>
+                    <option>منتصر اللجعبة</option>
+                    <option>محمد خشان</option>
+                    <option>رهف الجلاني </option>
+                    <option>احمد البكري</option>
+                    <option>احمد شكارنة </option>
+                    <option>ضياء ابو عمر</option>
+                    <option>اماتي ابو زنيد</option>
+                    <option>شهد السعده</option>
+                    <option>ضياء مشعل</option>
+                    <option value="custom">اسم مخصص...</option>
+                </select>
+                <input type="text" class="student-name-input w-full bg-white border-2 border-slate-100 p-2 rounded-lg font-bold text-slate-700 focus:border-indigo-500 outline-none mt-2 hidden" placeholder="أدخل اسم الطالب">
+            </div>
+            <div class="criteria-list space-y-4 flex-grow"></div>
+            <div class="mt-6 pt-4 border-t-2 border-dashed border-slate-200 flex justify-between items-center">
+                <div>
+                    <span class="text-[10px] font-black text-slate-400 block uppercase">Total</span>
+                    <span class="text-3xl font-black text-slate-800 student-total-display">0</span>
+                </div>
+                <span class="student-result-text font-bold text-[10px] px-2 py-1 bg-slate-200 rounded-full italic">N/A</span>
+            </div>
+        </div>
+    </template>
+
     <script>
-        function calc(id) {
-            const r = parseInt(document.getElementById(`s${id}_r`).value) || 0;
-            const p = parseInt(document.getElementById(`s${id}_p`).value) || 0;
-            const d = parseInt(document.getElementById(`s${id}_d`).value) || 0;
-            
-            // Limit checks
-            if (r > 30) document.getElementById(`s${id}_r`).value = 30;
-            if (p > 40) document.getElementById(`s${id}_p`).value = 40;
-            if (d > 30) document.getElementById(`s${id}_d`).value = 30;
-
-            const total = Math.min(100, (parseInt(document.getElementById(`s${id}_r`).value) || 0) + 
-                                       (parseInt(document.getElementById(`s${id}_p`).value) || 0) + 
-                                       (parseInt(document.getElementById(`s${id}_d`).value) || 0));
-            
-            document.getElementById(`total${id}`).innerText = total;
-        }
-
-        function getFormData() {
-            return {
-                projectTitle: document.getElementById('projectTitle').value,
-                supervisor: document.getElementById('supervisor').value,
-                examiner: document.getElementById('examiner').value,
-                date: document.getElementById('evalDate').value,
-                students: [
-                    { name: document.getElementById('name1').value, total: document.getElementById('total1').innerText },
-                    { name: document.getElementById('name2').value, total: document.getElementById('total2').innerText },
-                    { name: document.getElementById('name3').value, total: document.getElementById('total3').innerText }
+        let currentRole = '';
+        let isSyncing = false;
+        
+        const config = {
+            supervisor: {
+                title: "نموذج تقييم المشرف", sub: "Supervisor Evaluation", color: "bg-indigo-700",
+                fields: [
+                    { id: 'supervisorName', label: 'اسم المشرف', en: 'Supervisor Name' },
+                    { id: 'date', label: 'التاريخ', en: 'Date', type: 'date' }
+                ],
+                criteria: [
+                    { id: 'book', label: 'الكتاب (التوثيق)', max: 25, shared: true },
+                    { id: 'practical', label: 'الجانب العملي', max: 35, shared: true },
+                    { id: 'reviews', label: 'المراجعات الدورية', max: 20, shared: false },
+                    { id: 'teamwork', label: 'تعاون الفريق', max: 20, shared: false }
                 ]
-            };
+            },
+            examiner: {
+                title: "نموذج تقييم المناقش", sub: "Examiner Evaluation", color: "bg-emerald-700",
+                fields: [
+                    { id: 'supervisorName', label: 'اسم المشرف', en: 'Supervisor' },
+                    { id: 'examinerName', label: 'اسم المناقش', en: 'Examiner' },
+                    { id: 'date', label: 'التاريخ', en: 'Date', type: 'date' }
+                ],
+                criteria: [
+                    { id: 'report', label: 'جودة التقرير', max: 25 },
+                    { id: 'demo', label: 'العرض العملي', max: 30 },
+                    { id: 'presentation', label: 'مهارات العرض', max: 20 },
+                    { id: 'scientific', label: 'التمكن العلمي', max: 25 }
+                ]
+            }
+        };
+
+        function loadProjectData() {
+            const select = document.getElementById('projectSelect');
+            const input = document.getElementById('projectTitle');
+            if(select.value === 'custom') {
+                input.classList.remove('hidden');
+            } else {
+                input.classList.add('hidden');
+                input.value = select.options[select.selectedIndex].text;
+            }
         }
 
-        function exportExcel() {
-            const data = getFormData();
-            const wsData = [
-                ["Graduation Project Evaluation", ""],
-                ["Project Title", data.projectTitle],
-                ["Supervisor", data.supervisor],
-                ["Examiner", data.examiner],
-                ["Date", data.date],
-                ["", ""],
-                ["Student Name", "Total Grade (100)"]
+        function setRole(role) {
+            currentRole = role;
+            const data = config[role];
+            document.getElementById('roleSelection').classList.add('hidden');
+            document.getElementById('mainContainer').classList.remove('hidden');
+            document.getElementById('formHeader').className = `p-10 text-white text-center relative ${data.color}`;
+            document.getElementById('headerTitle').innerText = data.title;
+            document.getElementById('headerSub').innerText = data.sub;
+
+            if (role === 'supervisor') document.getElementById('syncSection').classList.remove('hidden');
+
+            const dynamicFields = document.getElementById('dynamicFields');
+            dynamicFields.innerHTML = '';
+            data.fields.forEach(f => {
+                const div = document.createElement('div');
+                div.innerHTML = `<label class="block font-bold text-slate-700 text-sm">${f.label}</label>
+                                 <input type="${f.type || 'text'}" id="${f.id}" class="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none font-medium">`;
+                dynamicFields.appendChild(div);
+            });
+
+            const wrapper = document.getElementById('studentsWrapper');
+            const template = document.getElementById('studentTemplate');
+            wrapper.innerHTML = '';
+            for (let i = 1; i <= 3; i++) {
+                const clone = template.content.cloneNode(true);
+                const card = clone.querySelector('.student-card');
+                const critList = clone.querySelector('.criteria-list');
+                const nameSelect = clone.querySelector('.student-name-select');
+                const nameInput = clone.querySelector('.student-name-input');
+
+                nameSelect.onchange = () => {
+                    if(nameSelect.value === 'custom') nameInput.classList.remove('hidden');
+                    else { nameInput.classList.add('hidden'); nameInput.value = nameSelect.value; }
+                };
+
+                data.criteria.forEach(c => {
+                    const row = document.createElement('div');
+                    row.innerHTML = `<div class="flex justify-between text-[10px] font-bold text-slate-500 mb-1"><span>${c.label}</span><span>Max: ${c.max}</span></div>
+                                     <input type="number" min="0" max="${c.max}" value="0" class="score-input w-full p-1 rounded-lg border focus:ring-2 focus:ring-indigo-100" data-id="${c.id}" data-shared="${c.shared || false}">`;
+                    
+                    const input = row.querySelector('input');
+                    input.addEventListener('input', (e) => {
+                        if (e.target.value > c.max) e.target.value = c.max;
+                        if (isSyncing && c.shared) {
+                            applySync(c.id, e.target.value);
+                        }
+                        updateTotal(card);
+                    });
+                    critList.appendChild(row);
+                });
+                wrapper.appendChild(clone);
+            }
+        }
+
+        function syncSharedMarks() {
+            isSyncing = !isSyncing;
+            const btn = event.target;
+            btn.innerText = isSyncing ? "إيقاف الدمج / Unsync" : "تفعيل الدمج / Sync Marks";
+            btn.className = isSyncing ? "bg-red-500 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-red-600 transition-all" : "bg-amber-500 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-amber-600 transition-all";
+        }
+
+        function applySync(criteriaId, value) {
+            document.querySelectorAll(`.score-input[data-id="${criteriaId}"]`).forEach(input => {
+                input.value = value;
+                updateTotal(input.closest('.student-card'));
+            });
+        }
+
+        function updateTotal(card) {
+            const inputs = card.querySelectorAll('.score-input');
+            let total = 0;
+            inputs.forEach(i => total += (parseInt(i.value) || 0));
+            card.querySelector('.student-total-display').innerText = total;
+            const res = card.querySelector('.student-result-text');
+            if (total >= 90) { res.innerText = "امتياز"; res.className = "student-result-text font-bold text-[10px] px-2 py-1 bg-indigo-100 rounded-full text-indigo-700"; }
+            else if (total >= 50) { res.innerText = "ناجح"; res.className = "student-result-text font-bold text-[10px] px-2 py-1 bg-emerald-100 rounded-full text-emerald-700"; }
+            else { res.innerText = "راسب"; res.className = "student-result-text font-bold text-[10px] px-2 py-1 bg-rose-100 rounded-full text-rose-700"; }
+        }
+
+        function exportToExcel() {
+            const data = config[currentRole];
+            const project = document.getElementById('projectTitle').value || 'Untitled';
+            const excelData = [
+                ["تقرير تقييم مشروع تخرج - " + data.title],
+                ["عنوان المشروع:", project],
+                ["المشرف:", document.getElementById('supervisorName').value],
+                ["تاريخ التقييم:", document.getElementById('date').value],
+                [],
+                ["اسم الطالب", "المجموع (100)", "النتيجة"]
             ];
-            data.students.forEach(s => {
-                if(s.name) wsData.push([s.name, s.total]);
+            document.querySelectorAll('.student-card').forEach(card => {
+                const name = card.querySelector('.student-name-input').value;
+                const total = card.querySelector('.student-total-display').innerText;
+                const result = card.querySelector('.student-result-text').innerText;
+                if (name) excelData.push([name, total, result]);
             });
-
+            const ws = XLSX.utils.aoa_to_sheet(excelData);
             const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.aoa_to_sheet(wsData);
-            XLSX.utils.book_append_sheet(wb, ws, "Scores");
-            XLSX.writeFile(wb, "Project_Grades.xlsx");
+            XLSX.utils.book_append_sheet(wb, ws, "Evaluation");
+            XLSX.writeFile(wb, `Graduation_Evaluation_${project}.xlsx`);
         }
 
-        function sendWhatsApp() {
-            const data = getFormData();
-            let msg = `*Graduation Project Scores*%0A` +
-                      `Project: ${data.projectTitle}%0A` +
-                      `-----------------------%0A`;
-            data.students.forEach(s => {
-                if(s.name) msg += `${s.name}: *${s.total}/100*%0A`;
+        function shareWhatsApp() {
+            const data = config[currentRole];
+            const project = document.getElementById('projectTitle').value || 'مشروع غير مسمى';
+            let msg = `*${data.title}*%0A*المشروع:* ${project}%0A------------------%0A`;
+            document.querySelectorAll('.student-card').forEach(card => {
+                const name = card.querySelector('.student-name-input').value;
+                const total = card.querySelector('.student-total-display').innerText;
+                const result = card.querySelector('.student-result-text').innerText;
+                if (name) msg += `👤 *${name}*: ${total}/100 (${result})%0A`;
             });
-            window.open(`https://wa.me/970592263191?text=${msg}`, '_blank');
+            window.open(`https://wa.me/?text=${msg}`, '_blank');
         }
+
+        function resetRole() { if(confirm("سيتم حذف البيانات الحالية، هل أنت متأكد؟")) location.reload(); }
     </script>
 </body>
 </html>
