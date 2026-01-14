@@ -1,4 +1,4 @@
-
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8,11 +8,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        body { font-family: 'Tajawal', sans-serif; background-color: #f8fafc; }
+        body { font-family: 'Tajawal', sans-serif; background-color: #f8fafc; display: flex; flex-direction: column; min-height: 100vh; }
         .score-input { border: 2px solid #e2e8f0; transition: all 0.2s; text-align: center; font-weight: 700; font-size: 1.1rem; }
         .score-input:focus { border-color: #4f46e5; outline: none; background-color: #fffbeb; }
         .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000; }
-        @media print { .no-print { display: none; } body { padding: 0; background: white; } }
+        footer { margin-top: auto; padding: 2rem 0; text-align: center; opacity: 0.8; }
+        @media print { .no-print { display: none; } body { padding: 0; background: white; } footer { position: static; margin-top: 20px; } }
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -21,7 +22,7 @@
         <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600"></div>
     </div>
 
-    <div id="app" class="max-w-6xl mx-auto space-y-6">
+    <div id="app" class="max-w-6xl mx-auto space-y-6 w-full">
         
         <!-- واجهة اختيار الدور -->
         <div id="roleSelection" class="bg-white p-10 rounded-[2.5rem] shadow-2xl text-center no-print border border-slate-200">
@@ -105,6 +106,14 @@
         </div>
     </div>
 
+    <!-- تذييل الصفحة - إعداد أنس الجعبري -->
+    <footer>
+        <div class="flex flex-col items-center justify-center space-y-1">
+            <span class="text-slate-400 text-sm font-medium">جميع الحقوق محفوظة &copy; 2026</span>
+            <span class="text-slate-800 text-lg font-black tracking-widest border-t border-slate-200 pt-2 px-6">إعداد أنس الجعبري</span>
+        </div>
+    </footer>
+
     <!-- قالب بطاقة الطالب -->
     <template id="studentTemplate">
         <div class="student-card bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm hover:shadow-md transition-all flex flex-col h-full">
@@ -163,7 +172,7 @@
             examiner: { 
                 id: 'exam',
                 title: "لجنة المناقشة", 
-                subtitle: "الالتقييم النهائي للمشروع", 
+                subtitle: "التقييم النهائي للمشروع", 
                 color: "from-emerald-600 to-emerald-800", 
                 criteria: [
                     {id:'report',label:'جودة التقرير',max:25},
@@ -190,23 +199,19 @@
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 currentUser = user;
-                listenToProjects(); // بدء الاستماع للمشاريع لحظياً
+                listenToProjects(); 
             }
         });
 
         initAuth();
 
-        // استماع لحظي لتغييرات المشاريع (قائمة المشاريع المرفوعة من الإدارة)
         function listenToProjects() {
             const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'projects'));
-            
-            // إلغاء أي استماع سابق لتجنب التكرار
             if (unsubscribeProjects) unsubscribeProjects();
-
             unsubscribeProjects = onSnapshot(q, (snapshot) => {
                 projectsDB = snapshot.docs.map(doc => doc.data());
                 renderProjectSelect();
-                if (document.getElementById('adminPanel').classList.contains('hidden') === false) {
+                if (!document.getElementById('adminPanel').classList.contains('hidden')) {
                     renderAdminData();
                 }
                 toggleLoading(false);
@@ -221,8 +226,6 @@
             const currentValue = sel.value;
             sel.innerHTML = '<option value="">-- اختر المشروع --</option>' + 
                 projectsDB.map(p => `<option value="${p.title}">${p.title}</option>`).join('');
-            
-            // الحفاظ على الخيار المختار إذا كان لا يزال موجوداً بعد التحديث
             if (projectsDB.some(p => p.title === currentValue)) {
                 sel.value = currentValue;
             }
@@ -242,25 +245,19 @@
             const title = document.getElementById('projectSelect').value;
             activeProject = projectsDB.find(p => p.title === title);
             const wrap = document.getElementById('studentsWrapper');
-            
             if (unsubscribeScores) unsubscribeScores();
-
             if(!activeProject) { 
                 wrap.innerHTML = '<div class="col-span-full py-20 text-center opacity-40"><p class="font-bold">يرجى اختيار المشروع</p></div>'; 
                 return; 
             }
-
             document.getElementById('supName').value = activeProject.supervisor;
             wrap.innerHTML = '';
-            
             const criteria = roles[currentRole].criteria;
-
             activeProject.students.forEach(studentName => {
                 const temp = document.getElementById('studentTemplate').content.cloneNode(true);
                 const card = temp.querySelector('.student-card');
                 card.setAttribute('data-student', studentName);
                 card.querySelector('.student-name-display').innerText = studentName;
-
                 criteria.forEach(crit => {
                     const row = document.createElement('div');
                     row.innerHTML = `
@@ -276,11 +273,9 @@
                 });
                 wrap.appendChild(temp);
             });
-
             if (!currentUser) return;
             const scoresCol = collection(db, 'artifacts', appId, 'public', 'data', 'evaluations');
             const q = query(scoresCol);
-            
             unsubscribeScores = onSnapshot(q, (snapshot) => {
                 snapshot.docs.forEach((doc) => {
                     const data = doc.data();
@@ -303,13 +298,10 @@
             let val = parseInt(input.value) || 0;
             if(val > max) { val = max; input.value = max; }
             if(val < 0) { val = 0; input.value = 0; }
-
             const card = input.closest('.student-card');
             calculateCardTotal(card);
-
             const docId = `${activeProject.title}_${studentName}_${currentRole}_${critId}`.replace(/[^a-zA-Z0-9]/g, '_');
             const scoreDoc = doc(db, 'artifacts', appId, 'public', 'data', 'evaluations', docId);
-            
             try {
                 await setDoc(scoreDoc, {
                     projectTitle: activeProject.title,
@@ -320,16 +312,13 @@
                     updatedAt: serverTimestamp(),
                     updatedBy: currentUser.uid
                 });
-            } catch (e) {
-                console.error("Save error:", e);
-            }
+            } catch (e) { console.error("Save error:", e); }
         };
 
         function calculateCardTotal(card) {
             let total = 0;
             card.querySelectorAll('.score-input').forEach(i => total += (parseInt(i.value) || 0));
             card.querySelector('.student-total-display').innerText = total;
-            
             const badge = card.querySelector('.student-result-text');
             if(total >= 90) { badge.innerText = "ممتاز"; badge.className = "student-result-text font-black text-xs px-5 py-2 rounded-full bg-indigo-100 text-indigo-700"; }
             else if(total >= 60) { badge.innerText = "ناجح"; badge.className = "student-result-text font-black text-xs px-5 py-2 rounded-full bg-emerald-100 text-emerald-700"; }
@@ -342,9 +331,7 @@
                 document.getElementById('roleSelection').classList.add('hidden');
                 document.getElementById('adminPanel').classList.remove('hidden');
                 renderAdminData();
-            } else {
-                alert("خطأ في كلمة المرور");
-            }
+            } else { alert("خطأ في كلمة المرور"); }
         };
 
         window.goBack = () => {
@@ -378,33 +365,25 @@
                 toggleLoading(true);
                 const workbook = XLSX.read(new Uint8Array(event.target.result), { type: 'array' });
                 const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-                
                 const tempDB = [];
                 json.forEach(r => {
                     const p = r['اسم المشروع'], s = r['اسم الطالب'], sup = r['اسم المشرف'];
                     if(!p || !s) return;
                     let project = tempDB.find(item => item.title === p);
-                    if(project) { 
-                        if(!project.students.includes(s)) project.students.push(s); 
-                    } else {
-                        tempDB.push({ title: p, supervisor: sup || "غير معروف", students: [s] });
-                    }
+                    if(project) { if(!project.students.includes(s)) project.students.push(s); } 
+                    else { tempDB.push({ title: p, supervisor: sup || "غير معروف", students: [s] }); }
                 });
-
                 for (const proj of tempDB) {
                     const projId = proj.title.replace(/[^a-zA-Z0-9]/g, '_');
                     const projDoc = doc(db, 'artifacts', appId, 'public', 'data', 'projects', projId);
                     await setDoc(projDoc, proj);
                 }
-                
                 alert("تم تحديث البيانات للجميع بنجاح!");
             };
             reader.readAsArrayBuffer(file);
         };
 
-        function toggleLoading(show) {
-            document.getElementById('loading').classList.toggle('hidden', !show);
-        }
+        function toggleLoading(show) { document.getElementById('loading').classList.toggle('hidden', !show); }
 
         window.exportToExcel = () => {
             const project = document.getElementById('projectSelect').value;
